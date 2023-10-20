@@ -44,7 +44,7 @@ alt_integration_term = 0
 alt_flag = 1
 throttle = 0.5  # initialize Throttle
 ##############################################
-target_front_dist = 10
+target_front_dist = 2
 pitch_rate = 0
 pitch_K_P = 0.5
 pitch_K_I = 0.0
@@ -71,18 +71,24 @@ x_pos = []
 y_pos = []
 lat_error = []
 
+lidars = list()
+front_index = 0
+
 turning_threshold = 5
+
+sustain = time.time()
+sustain_flag = False
 
 while True:
            
     now = time.time()
-    if now - start > 42:
+    if now - start > 60:
         target_alt = 0
-    if now - start > 45:   
+    if now - start > 65:   
         break
     
     #control signal 
-    E100_functions.set_quadcopter(client,desired_roll,desired_pitch,desired_yaw,throttle)
+    
     
     x,y = E100_functions.get_XY(client)
     x_pos.append(x)
@@ -100,22 +106,31 @@ while True:
     altitude_n1 = altitude
     
     roll, pitch, yaw = E100_functions.get_orientation(client) # read quadcopter's attitude
+    # lidars[front_index], lidars[(front_index+1) % 4], lidars[(front_index+3) % 4], lidars[(front_index+2) % 4] (0, 1, 3, 2)
+    lidars[front_index], lidars[(front_index + 1) % 4], lidars[(front_index + 3) % 4], lidars[(front_index + 2) % 4] = E100_functions.get_lidars(client)    # read LIDAR readings
     
-    front, right, left, back = E100_functions.get_lidars(client)    # read LIDAR readings
+    lidars[front_index] = alpha_lidar*lidars[front_index] + (1-alpha_lidar)*front1 # low pass filter on lidar lidars[front_index] reading. Dist from drone to wall 
+    lidars[(front_index + 1) % 4] = alpha_lidar*lidars[(front_index+1) % 4] + (1-alpha_lidar)*right1 #low pass on lidars[(front_index+1) % 4] distance
+    lidars[(front_index + 3) % 4] = alpha_lidar*lidars[(front_index+3) % 4] + (1-alpha_lidar)*left1 #low pass on lidars[(front_index+3) % 4] distance
     
-    front = alpha_lidar*front + (1-alpha_lidar)*front1 # low pass filter on lidar front reading. Dist from drone to wall 
-    right = alpha_lidar*right + (1-alpha_lidar)*right1 #low pass on right distance
-    left = alpha_lidar*left + (1-alpha_lidar)*left1 #low pass on left distance
+    '''
+    delta_right = lidars[(front_index+1) % 4]-right1
+    delta_left  = lidars[(front_index+3) % 4]-left1 
     
-    delta_right = right-right1
-    delta_left  = left-left1 
-    
-    if(delta_right > turning_threshold):
+    if(delta_right > turning_threshold and not sustain_flag):
+        sustain_flag = True
+        sustain = time.time()
         
+    print(sustain)
+    if now-sustain > 2 and sustain_flag:
+        print("YAWING")
+        desired_yaw += 90
+        sustain_flag = False
+    '''
     
-    front1 = front 
-    right1 = right
-    left1 = left
+    front1 = lidars[front_index] 
+    right1 = lidars[(front_index+1) % 4]
+    left1 = lidars[(front_index+3) % 4]
     
     
     if alt_flag == 1:
@@ -133,14 +148,14 @@ while True:
         throttle = 1       
     
     ##############################################################
-    #front dist hold part(PID controller+activation function)####
+    #lidars[front_index] dist hold part(PID controller+activation function)####
     ##############################################################     
     if pitch_flag == 1:
-        pitch_error_old = target_front_dist - front
+        pitch_error_old = target_front_dist - lidars[front_index]
         pitch_flag = 0
     else:
         pitch_error_old = pitch_error    
-    pitch_error= target_front_dist - front
+    pitch_error= target_front_dist - lidars[front_index]
     pitch_integration_term += pitch_error*dt
     pitch_differential_term = (pitch_error - pitch_error_old)/dt
     desired_pitch = pitch_K_P*pitch_error + pitch_K_I*pitch_integration_term + pitch_K_D*pitch_differential_term
@@ -150,19 +165,39 @@ while True:
     #center dist hold part(PID controller+activation function)####
     ##############################################################    
     if roll_flag == 1:
-        roll_error_old = right - left
+        roll_error_old = lidars[(front_index+1) % 4] - lidars[(front_index+3) % 4]
         roll_flag = 0
     else:
         roll_error_old = roll_error    
-    roll_error=  right - left
+    roll_error=  lidars[(front_index+1) % 4] - lidars[(front_index+3) % 4]
     roll_integration_term += roll_error*dt
     roll_differential_term = (roll_error - roll_error_old)/dt    
     desired_roll = roll_K_P*roll_error + roll_K_I*roll_integration_term + roll_K_D*roll_differential_term
     desired_roll = math.degrees(0.075*np.tanh(desired_roll))
-    desired_yaw = 0
+    # sired_yaw = 0
     
-    lat_error.append(right - left)
+    lat_error.append(lidars[(front_index+1) % 4] - lidars[(front_index+3) % 4])
     # plt.plot(lat_error)
+    switch(front_index):
+        case 0:
+            break
+        case 1: # pos pitch is pos roll and pos roll is neg pitch
+            temp = desired_roll
+            desired_roll = desired_pitch
+            desired_pitch = -temp
+            break
+        case 2: # pos pitch is neg pitch and pos roll is neg roll
+            desired_pitch *= -1
+            desired_roll *= -1
+            break
+        case 3: # pos pitch is neg roll and pos roll is pos pitch
+            temp = desired_roll
+            desired_roll = -desired_pitch
+            desired_pitch = temp
+            break
+        default:
+            print("chat is this real")
+    E100_functions.set_quadcopter(client,desired_roll,desired_pitch,desired_yaw,throttle)
 
 
 plt.scatter(x_pos,y_pos)
