@@ -1,7 +1,7 @@
 import math
 
 class PID:
-    def __init__ (self, KP, KI, KD, dt):
+    def __init__ (self, KP: float, KI: float, KD: float, dt:float):
         self.KP = KP
         self.KI = KI
         self.KD = KD
@@ -9,7 +9,7 @@ class PID:
         self.lastErr = 0
         self.totalErr = 0
 
-    def calculate(self, current, setpoint):
+    def calculate(self, current: float, setpoint: float) -> float:
         err = setpoint - current
 
         self.totalErr += err * self.dt
@@ -20,16 +20,16 @@ class PID:
 
         lastErr = err
 
-        return Utilities.clamp(output, 0 ,1)
+        return clamp(output, 0, 1)
     
-    def calculate(self, measurement):
+    def calculate(self, measurement: float) -> float:
         return self.calculate(measurement, 0)
     
     
     
 
-def find_lpf(alpha, dat, prev):
-    return self.alpha*dat + (1-self.alpha)*prev
+def find_lpf(alpha: float, dat: float, prev: float) -> float:
+    return alpha*dat + (1-alpha)*prev
 
-def clamp(value, min, max):
+def clamp(value, min: float, max: float) -> float:
     return math.max(min, math.min(value, max))
