@@ -24,7 +24,10 @@ import matplotlib.pyplot as plt
 
 import airsim              # import AirSim API
 import E100_functions      # import drone simulator library
-from PID_controller import PID
+
+
+############## ME100 Libraries
+from ME100Lib import PID, find_lpf
 
 dt = E100_functions.dt()  
 client = airsim.MultirotorClient()
@@ -41,10 +44,11 @@ target_alt = 10
 K_P = 1
 K_I = 0.
 K_D = 2
-alt_integration_term = 0
-alt_flag = 1
+# alt_integration_term = 0
+# alt_flag = 1
 throttle = 0.5  # initialize Throttle
 alt_pid = PID(K_P, K_I, K_D, dt)
+
 
 
 ##############################################
@@ -53,16 +57,18 @@ pitch_rate = 0
 pitch_K_P = 0.5
 pitch_K_I = 0.0
 pitch_K_D = 1
-pitch_integration_term = 0
-pitch_flag = 1
+# pitch_integration_term = 0
+# pitch_flag = 1
+pit_pid = PID(pitch_K_P, pitch_K_I, pitch_K_D, dt)
 desired_pitch = 0
 ##############################################
 target_right_dist = 5
 roll_K_P = 0.5
 roll_K_I = 0.0
 roll_K_D = 0.65
-roll_integration_term = 0
-roll_flag = 1
+# roll_integration_term = 0
+# roll_flag = 1
+roll_pid = PID(roll_K_P, roll_K_I, roll_K_D, dt)
 desired_roll = 0 
 desired_yaw = 0
 
@@ -98,26 +104,31 @@ while True:
         front1, right1, left1, back1 = E100_functions.get_lidars(client)
                
     altitude_n0 = E100_functions.get_altitude(client) # read quadcopter's altitude 
-    altitude = alpha_alt*altitude_n0 + (1-alpha_alt)*altitude_n1  # apply low-pass filter
+    # altitude = alpha_alt*altitude_n0 + (1-alpha_alt)*altitude_n1  # apply low-pass filter
+    altitude = find_lpf(alpha_alt, altitude_n0, altitude_n1)
     altitude_n1 = altitude
     
     roll, pitch, yaw = E100_functions.get_orientation(client) # read quadcopter's attitude
     
     front, right, left, back = E100_functions.get_lidars(client)    # read LIDAR readings
     
-    front = alpha_lidar*front + (1-alpha_lidar)*front1 # low pass filter on lidar front reading. Dist from drone to wall 
-    right = alpha_lidar*right + (1-alpha_lidar)*right1 #low pass on right distance
-    left = alpha_lidar*left + (1-alpha_lidar)*left1 #low pass on left distance
+    # front = alpha_lidar*front + (1-alpha_lidar)*front1 # low pass filter on lidar front reading. Dist from drone to wall 
+    # right = alpha_lidar*right + (1-alpha_lidar)*right1 #low pass on right distance
+    # left = alpha_lidar*left + (1-alpha_lidar)*left1 #low pass on left distance
+
+    front = find_lpf(alpha_lidar, front, front1)
+    right = find_lpf(alpha_lidar, right, right1)
+    left = find_lpf(alpha_lidar, left, left1)
     
     front1 = front
     right1 = right
     left1 = left
     
-    if alt_flag == 1:
-        error_old = target_alt-altitude
-        alt_flag = 0
-    else:
-        error_old = error    
+    # if alt_flag == 1:
+    #     error_old = target_alt-altitude
+    #     alt_flag = 0
+    # else:
+    #     error_old = error    
     # error= target_alt-altitude
     # alt_integration_term += error*dt
     # alt_differential_term = (error - error_old)/dt  
@@ -133,29 +144,34 @@ while True:
     ##############################################################
     #front dist hold part(PID controller+activation function)####
     ##############################################################     
-    if pitch_flag == 1:
-        pitch_error_old = target_front_dist - front
-        pitch_flag = 0
-    else:
-        pitch_error_old = pitch_error    
-    pitch_error= target_front_dist - front
-    pitch_integration_term += pitch_error*dt
-    pitch_differential_term = (pitch_error - pitch_error_old)/dt
-    desired_pitch = pitch_K_P*pitch_error + pitch_K_I*pitch_integration_term + pitch_K_D*pitch_differential_term
+    # if pitch_flag == 1:
+    #     pitch_error_old = target_front_dist - front
+    #     pitch_flag = 0
+    # else:
+    #     pitch_error_old = pitch_error    
+    # pitch_error= target_front_dist - front
+    # pitch_integration_term += pitch_error*dt
+    # pitch_differential_term = (pitch_error - pitch_error_old)/dt
+    # desired_pitch = pitch_K_P*pitch_error + pitch_K_I*pitch_integration_term + pitch_K_D*pitch_differential_term
+
+    desired_pitch = pit_pid.calculate(target_front_dist - front)
+
     desired_pitch = math.degrees(0.075*np.tanh(desired_pitch))  # use tanh function to limit the maximum and minimum of the pitch value
     
     ##############################################################
     #center dist hold part(PID controller+activation function)####
     ##############################################################    
-    if roll_flag == 1:
-        roll_error_old = right - left
-        roll_flag = 0
-    else:
-        roll_error_old = roll_error    
-    roll_error=  right - left
-    roll_integration_term += roll_error*dt
-    roll_differential_term = (roll_error - roll_error_old)/dt    
-    desired_roll = roll_K_P*roll_error + roll_K_I*roll_integration_term + roll_K_D*roll_differential_term
+    # if roll_flag == 1:
+    #     roll_error_old = right - left
+    #     roll_flag = 0
+    # else:
+    #     roll_error_old = roll_error    
+    # roll_error=  right - left
+    # roll_integration_term += roll_error*dt
+    # roll_differential_term = (roll_error - roll_error_old)/dt    
+    # desired_roll = roll_K_P*roll_error + roll_K_I*roll_integration_term + roll_K_D*roll_differential_term
+
+    desired_roll = roll_pid.calculate(right - left)
     desired_roll = math.degrees(0.075*np.tanh(desired_roll))
     desired_yaw = 0
     

@@ -20,10 +20,16 @@ class PID:
 
         lastErr = err
 
-        return self.clamp(output, 0 ,1)
+        return Utilities.clamp(output, 0 ,1)
     
     def calculate(self, measurement):
         return self.calculate(measurement, 0)
     
-    def clamp(self, value, min, max):
-        return math.max(min, math.min(value, max))
+    
+    
+
+def find_lpf(alpha, dat, prev):
+    return self.alpha*dat + (1-self.alpha)*prev
+
+def clamp(value, min, max):
+    return math.max(min, math.min(value, max))
