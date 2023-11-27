@@ -28,6 +28,7 @@ import E100_functions      # import drone simulator library
 
 ############## ME100 Libraries
 from ME100Lib import PID, find_lpf
+from constants import Altitude_Constants as AConst, alpha_lidar, Pitch_Constants as PConst
 
 dt = E100_functions.dt()  
 client = airsim.MultirotorClient()
@@ -37,15 +38,18 @@ client.armDisarm(True)
 
 #### Copy and paste the above in your own flight controller #####
 
-alpha_alt = 0.7
-alpha_lidar = 0.3
-
+alpha_alt = AConst.alpha_alt
+# alpha_lidar = a_l
+###### TODO ALTITUDE IS ALREADY DONE, JUST DO THE SAME FOR THE OTHER 2 SETS OF CONSTANTS, MAKES IT EASIER TO TUNE, you need to edit "constants.py" as well
 target_alt = 10
-K_P = 1
-K_I = 0.
-K_D = 2
+# K_P = 1
+# K_I = 0.
+# K_D = 2
 throttle = 0.5  # initialize Throttle
-alt_pid = PID(K_P, K_I, K_D, dt)
+alt_pid = PID(AConst.altitude_pid_gains[0],
+                AConst.altitude_pid_gains[1],
+                AConst.altitude_pid_gains[2],
+                dt)
 ##############################################
 target_front_dist = 10
 pitch_rate = 0
