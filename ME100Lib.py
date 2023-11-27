@@ -2,6 +2,8 @@ import math
 from constants import distance_threshold
 from enum import Enum
 
+decision_thresh = 100 #choose a number that makes sense
+
 class PID:
     def __init__ (self, KP: float, KI: float, KD: float, dt:float):
         self.KP = KP
@@ -43,16 +45,44 @@ Parameters:
     right_dist (float): the LiDAR perceived distance to the right wall
 Logic:
     If the distance is above some constant threshold (defined at imports), then that's the correct direction 
+    up_dist and down_dist need to be defined, I just chose names
+
+Actions:
+I described the actions below, I am not sure what the code looks like.
 '''
 def decide_turn(left_dist, right_dist) -> float:
-    ...
+    if left_dist >= decision_thresh and left_dist > right_dist:
+        #turn left
+        pass
+    elif right_dist >= decision_thresh and right_dist >= left_dist:
+        #turn right 
+        pass
+    else:
+        #keep going straight 
+        pass
+
+def decide_altitude(up_dist, down_dist) -> float:
+    if up_dist >= decision_thresh and up_dist > down_dist:
+        #go up
+        pass
+    elif down_dist >= decision_thresh and down_dist >= up_dist:
+        #go down
+        pass
+    else:
+        #maintain altitude 
+        pass
     
+    
+
 '''
 Purpose: This function's goal is to determine the yaw that needs to be used based on the direction
 Keep in mind that yaw increases in the counter clockwise direction
+
 Parameters:
     decision (Direction): This is the direction chosen, this is in the form of Direction.LEFT, or Direction.RIGHT
     current_yaw (float): This is the current yaw being tracked on the drone
+
+I didn't do anything here because I was not sure how this was supposed to work.
 '''
 def determine_yaw(decision, current_yaw) -> float:
-    ...
+    pass
