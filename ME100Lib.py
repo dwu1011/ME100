@@ -36,7 +36,7 @@ def find_lpf(alpha: float, dat: float, prev: float) -> float:
 def clamp(value, min: float, max: float) -> float:
     return math.max(min, math.min(value, max))
 
-Direction = Enum('Direction', ['LEFT', 'RIGHT'])
+Direction = Enum('Direction', ['LEFT', 'RIGHT', 'STRAIGHT'])
 
 '''
 Purpose: This function's goal is to determine whether it's a good idea to turn left or right
@@ -52,14 +52,16 @@ I described the actions below, I am not sure what the code looks like.
 '''
 def decide_turn(left_dist, right_dist) -> float:
     if left_dist >= decision_thresh and left_dist > right_dist:
-        #turn left
-        pass
+        return Direction.LEFT
+        # pass
     elif right_dist >= decision_thresh and right_dist >= left_dist:
         #turn right 
-        pass
+        return Direction.RIGHT
+        # pass
     else:
         #keep going straight 
-        pass
+        return Direction.STRAIGHT
+        # pass
 
 def decide_altitude(up_dist, down_dist) -> float:
     if up_dist >= decision_thresh and up_dist > down_dist:
@@ -85,4 +87,8 @@ Parameters:
 I didn't do anything here because I was not sure how this was supposed to work.
 '''
 def determine_yaw(decision, current_yaw) -> float:
-    pass
+    if(decision is Direction.LEFT):
+        return current_yaw + 90 # is this supposed to return the yaw or set the yaw 
+    elif(decision is Direction.RIGHT):
+        return current_yaw - 90
+    return current_yaw

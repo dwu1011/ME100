@@ -27,8 +27,9 @@ import E100_functions      # import drone simulator library
 
 
 ############## ME100 Libraries
-from ME100Lib import PID, find_lpf
+from ME100Lib import PID, find_lpf, Direction, decide_turn, determine_yaw
 from constants import Altitude_Constants as AConst, alpha_lidar, Pitch_Constants as PConst
+from constants import Roll_Constants as RConst
 
 dt = E100_functions.dt()  
 client = airsim.MultirotorClient()
@@ -52,18 +53,17 @@ alt_pid = PID(AConst.altitude_pid_gains[0],
                 dt)
 ##############################################
 target_front_dist = 10
-pitch_rate = 0
-pitch_K_P = 0.5
-pitch_K_I = 0.0
-pitch_K_D = 1
-pit_pid = PID(pitch_K_P, pitch_K_I, pitch_K_D, dt)
+pitch_pid = PID(PConst.pitch_pid_gains[0],
+                    PConst.pitch_pid_gains[1],
+                    PConst.pitch_pid_gains[2],
+                    dt)
 desired_pitch = 0
 ##############################################
 target_right_dist = 5
-roll_K_P = 0.5
-roll_K_I = 0.0
-roll_K_D = 0.65
-roll_pid = PID(roll_K_P, roll_K_I, roll_K_D, dt)
+roll_pid = PID(RConst.roll_pid_gains[0],
+                    RConst.roll_pid_gains[1],
+                    RConst.roll_pid_gains[2],
+                    dt)
 desired_roll = 0 
 desired_yaw = 0
 
@@ -116,15 +116,19 @@ while True:
     
     throttle = alt_pid.calculate(altitude, target_alt)
 
-    desired_pitch = pit_pid.calculate(target_front_dist - front)
+    desired_pitch = pitch_pid.calculate(target_front_dist - front)
 
     desired_pitch = math.degrees(0.075*np.tanh(desired_pitch))  # use tanh function to limit the maximum and minimum of the pitch value
 
     desired_roll = roll_pid.calculate(right - left)
     desired_roll = math.degrees(0.075*np.tanh(desired_roll))
-    desired_yaw = 0
+
+    d = decide_turn(left, right)
+    desired_yaw = determine_yaw(d, yaw)
     
     lat_error.append(right - left)
+
+
     # plt.plot(lat_error)
 
 
