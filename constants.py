@@ -9,4 +9,8 @@ distance_threshold = 10
 
 class Pitch_Constants:
     target_front_dist = 10
-    pitch_pid_gains = (0.5, 0., 1.)
+    pitch_pid_gains = (0.5, 0.0 , 1.)
+
+class Roll_Constants:
+    target_right_dist = 5
+    roll_pid_gains = (0.5, 0.0, 0.65)
