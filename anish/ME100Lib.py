@@ -43,7 +43,7 @@ def find_lpf(alpha: float, dat: float, prev: float) -> float:
 def clamp(value, mi: float, ma: float) -> float:
     return max(mi, min(value, ma))
 
-Direction = Enum('Direction', ['LEFT', 'RIGHT', 'STRAIGHT'])
+Direction = Enum('Direction', ['LEFT', 'RIGHT', 'STRAIGHT', 'BACK', 'TOP', 'BOTTOM'])
 
 '''
 Purpose: This function's goal is to determine whether it's a good idea to turn left or right
@@ -57,7 +57,7 @@ Logic:
 Actions:
 I described the actions below, I am not sure what the code looks like.
 '''
-def decide_turn(left_dist, right_dist) -> float:
+def decide_turn(left_dist, right_dist) -> Direction:
     if left_dist >= decision_thresh and left_dist > right_dist:
         return Direction.LEFT
         # pass
@@ -65,23 +65,19 @@ def decide_turn(left_dist, right_dist) -> float:
         #turn right 
         return Direction.RIGHT
         # pass
+    #elif back_dist >= decision_thresh:
+    #   return Direction.BACK
     else:
         #keep going straight 
         return Direction.STRAIGHT
-        # pass
-
-def decide_altitude(up_dist, down_dist) -> float:
-    if up_dist >= decision_thresh and up_dist > down_dist:
-        #go up
-        pass
-    elif down_dist >= decision_thresh and down_dist >= up_dist:
-        #go down
-        pass
-    else:
-        #maintain altitude 
-        pass
     
     
+def decide_vertical(top_dist, bot_dist) -> Direction:
+    if top_dist >= decision_thresh and top_dist >= bot_dist:
+        return Direction.TOP
+    elif bot_dist >= decision_thresh and bot_dist >= top_dist:
+        return Direction.BOTTOM
+    return None
 
 '''
 Purpose: This function's goal is to determine the yaw that needs to be used based on the direction
