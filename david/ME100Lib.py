@@ -65,21 +65,21 @@ def decide_turn(left_dist, right_dist) -> Direction:
         return Direction.STRAIGHT
         # pass
 
-def decide_altitude(up_dist, down_dist) -> Direction:
-    if up_dist >= decision_thresh and up_dist > down_dist:
+def decide_altitude(up_dist, down_dist, thresh) -> Direction:
+    if up_dist >= thresh and up_dist > down_dist:
         #go up
         return Direction.UP
-    elif down_dist >= decision_thresh and down_dist >= up_dist:
+    elif down_dist >= 7 and down_dist > up_dist:
         #go down
         return Direction.DOWN
     else:
         #maintain altitude 
         return Direction.STRAIGHT
     
-def decide_all(up, down, left, right) -> Direction:
+def decide_all(up, down, left, right, thresh) -> Direction:
     d = decide_turn(left, right)
     if(d != Direction.STRAIGHT): return d
-    d = decide_altitude(up, down)
+    d = decide_altitude(up, down, thresh)
     return d
 
 def check_directions(front, left, right, rear):
