@@ -67,11 +67,11 @@ roll_pid = PID(RConst.roll_pid_gains[0],
                     RConst.roll_pid_gains[1],
                     RConst.roll_pid_gains[2],
                     dt)
-desired_roll = 0 
-desired_yaw = 0
-target_yaw = 0
+target_up_dist = 5
+top_alt_pid = PID(1.0, 0.05, 0.75, dt)
 
-P_yaw = 0.75
+desired_roll = 0 
+desired_yaw = 180
 
 start = time.time()
 
@@ -83,8 +83,8 @@ y_pos = []
 lat_error = []
 yaw_log = []
 dyaw_log = []
-
 alt_log = []
+
 d = Direction.STRAIGHT
 
 calc_alt = True
@@ -92,26 +92,26 @@ calc_alt = True
 right_pid = False
 left_pid = False
 front_pid = True
+up_pid = False
+down_pid = True
 
 twod = True
 
 last = time.time()
 
 while True:
-           
     now = time.time()
-    # if now - start > 20:
-    #     #target_alt = 0
-    #     ...
     
     if now - start > 240:   
         break
+    
     if(calc_alt):
         bottom = E100_functions.get_SONAR(client)
         top = E100_functions.get_top_lidar(client)
         
         target_alt = (bottom+top)/2
         calc_alt = False
+    
     #control signal 
     #print(throttle, desired_roll, desired_pitch, desired_yaw)
     E100_functions.set_quadcopter(client,desired_roll,desired_pitch,desired_yaw,throttle)
@@ -131,30 +131,15 @@ while True:
         front1, right1, left1, back1 = E100_functions.get_lidars(client)
         
     
-    altitude_n0 = E100_functions.get_altitude(client) # read quadcopter's altitude 
-    altitude = find_lpf(alpha_alt, altitude_n0, altitude_n1)
-    altitude_n1 = altitude
-    
-    alt_log.append(altitude_n0)
-    # plt.plot(alt_log)
-    
-    roll, pitch, yaw = E100_functions.get_orientation(client) # read quadcopter's attitude
-    
-   
-    # print(yaw, desired_yaw, target_yaw)
-    
-    print(roll, pitch, yaw, target_alt, altitude_n0, top)
-    
-    yaw_log.append(yaw)
-    dyaw_log.append(desired_yaw)
-    
+    down = E100_functions.get_altitude(client) # read quadcopter's altitude 
+    roll, pitch, yaw = E100_functions.get_orientation(client) # read quadcopter's rll pitch yaw
     front, right, left, back = E100_functions.get_lidars(client)    # read LIDAR readings
     top = E100_functions.get_top_lidar(client)
-    down = E100_functions.get_SONAR(client)
     
     # print(front, right, left, back)
     front = np.cos(math.radians(abs(desired_pitch)))*front
     
+    altitude = find_lpf(alpha_alt, down, altitude_n1)
     front = find_lpf(alpha_lidar, front, front1)
     right = find_lpf(alpha_lidar, right, right1)
     left = find_lpf(alpha_lidar, left, left1)
@@ -162,11 +147,14 @@ while True:
     front1 = front
     right1 = right
     left1 = left
+    altitude_n1 = altitude
     
-    throttle = max(0,min(1,alt_pid.calculateWithSetpoint(altitude, target_alt)))
-
-    # desired_roll = roll_pid.calculateWithSetpoint(left, right)
-    # desired_roll = -math.degrees(0.075*np.tanh(desired_roll))
+    #################### PID STUFF #######################
+    
+    if(down_pid):
+        throttle = max(0,min(1, alt_pid.calculateWithSetpoint(altitude, target_alt)))
+    elif(up_pid):
+        throttle = max(0,min(1, top_alt_pid.calculateWithSetpoint(target_up_dist, top)))
     
     if(left_pid):
         desired_roll = roll_pid.calculateWithSetpoint(left, 5)
@@ -193,43 +181,56 @@ while True:
         right_pid = False
         # left_pid = False
     
-    
-    x, y, z = E100_functions.get_linear_velocity(client)
-    print(x,y,z)
-    
-    if(math.isclose(front, target_front_dist,rel_tol= 2e-2) and now-last > 3):
+    linear_vel = abs(E100_functions.get_linear_velocity(client)[0 if math.isclose(abs(desired_yaw % 180), 90, abs_tol=1) else 1])
+    print(linear_vel, twod, now-last, (abs(linear_vel) < .002))
+    if(twod and (abs(linear_vel) < .02) and now-last > 3):
+        # math.isclose(front, target_front_dist,rel_tol= 2e-2) 
         print("CLOSE ENOUGH")
-        d = decide_all(top, down, left, right)
+        d = decide_all(top, down, left, right, target_alt)
+        print(d)
+        last = now
         if(d == Direction.LEFT):
-            last = now
             left_pid = False
             right_pid = True
         elif(d == Direction.RIGHT):
-            last = now
             right_pid = False
             left_pid = True
         elif(d == Direction.UP and twod):
             print("GOING UPPP")
             twod = False
-            last = now
-            target_alt = altitude_n0 + top - 5
-            # front_pid = False
-            desired_pitch = 0
+            down_pid = False
+            up_pid = True
+        elif(d == Direction.DOWN and twod):
+            print("GOING DOWNN")
+            twod = False
+            down_pid = True
+            up_pid = False
+            target_alt = 5
     else:
         d = Direction.STRAIGHT
-    
+ 
     if(yaw < 0): yaw += 360
+    
     if d == Direction.RIGHT or d==Direction.LEFT:
-        print("starting to ROTATE")
-        print(left_pid ,right_pid)
-        
+        print("starting to", d)
         desired_yaw = determine_yaw(d, yaw)
     
-    if(not twod and  math.isclose(target_alt, altitude_n0, rel_tol = 1e-2)):
+    # print(target_up_dist, top)
+    if(not twod and ((down_pid and math.isclose(target_alt, down, rel_tol = 1e-2))
+                     or (up_pid and math.isclose(target_up_dist, top, rel_tol = 1e-2)))):
+        last = now
         check_direction = check_directions(front, left, right, back)
         desired_yaw = determine_yaw(check_direction, yaw)
-        twod=True
-    
+        
+        if(check_direction == Direction.LEFT):
+            right_pid = True
+            left_pid = False
+        elif(check_direction == Direction.RIGHT):
+            right_pid = False
+            left_pid = True
+        
+        twod = True
+
     lat_error.append(right - left)
 
     # print(front)
