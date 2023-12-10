@@ -27,7 +27,7 @@ import airsim              # import AirSim API
 import E100_functions      # import drone simulator library
 
 
-############## ME100 Libraries
+############## ME100 Libraries ##############
 from ME100Lib import PID, find_lpf, Direction, decide_turn, decide_vertical, determine_yaw, clamp, get_custom_lidar
 from constants import Altitude_Constants as AConst, alpha_lidar, Pitch_Constants as PConst
 from constants import Roll_Constants as RConst
@@ -38,28 +38,24 @@ client.confirmConnection()
 client.enableApiControl(True)
 client.armDisarm(True)
 
-#### Copy and paste the above in your own flight controller #####
-
+################ ALTITUDE INITIALIZATIONS ################
 alpha_alt = AConst.alpha_alt
-# alpha_lidar = a_l
-###### TODO ALTITUDE IS ALREADY DONE, JUST DO THE SAME FOR THE OTHER 2 SETS OF CONSTANTS, MAKES IT EASIER TO TUNE, you need to edit "constants.py" as well
 target_alt = AConst.target_alt
-# K_P = 1
-# K_I = 0.
-# K_D = 2
 throttle = 0.5  # initialize Throttle
 alt_pid = PID(AConst.altitude_pid_gains[0],
                 AConst.altitude_pid_gains[1],
                 AConst.altitude_pid_gains[2],
                 dt)
-##############################################
+
+################ PITCH INITIALIZATIONS ################
 target_front_dist = PConst.target_front_dist
 pitch_pid = PID(PConst.pitch_pid_gains[0],
                     PConst.pitch_pid_gains[1],
                     PConst.pitch_pid_gains[2],
                     dt)
 desired_pitch = 0
-##############################################
+
+################ ROLL INITIALIZATIONS ################
 target_right_dist = 5
 roll_pid = PID(RConst.roll_pid_gains[0],
                     RConst.roll_pid_gains[1],
@@ -81,7 +77,7 @@ x_pos = []
 y_pos = []
 lat_error = []
 
-State = Enum('State', ['M', 'T', 'B'])
+State = Enum('State', ['M', 'T', 'B']) # STATE DESCRIBES THE CURRENT HANDLED INSTRUCTION
 
 drone_state = State.M
 
@@ -98,8 +94,6 @@ while True:
     if now - start > 300:   
         break
     
-    #control signal 
-    #print("throttle:", throttle, "\ndesired pitch:", desired_pitch, "\ndesired roll:", desired_roll, "\nDirection Decision:", str(d), "\nDesired_yaw:", desired_yaw, "\n------------------------")
     E100_functions.set_quadcopter(client,desired_roll,desired_pitch,desired_yaw,throttle)
     
     x,y = E100_functions.get_XY(client)
@@ -116,19 +110,19 @@ while True:
         top1 = get_custom_lidar(client)
                
     altitude_n0 = E100_functions.get_altitude(client) # read quadcopter's altitude 
-    altitude = find_lpf(alpha_alt, altitude_n0, altitude_n1)
+    altitude = find_lpf(alpha_alt, altitude_n0, altitude_n1) # apply the low-pass filter
     altitude_n1 = altitude
     
     roll, pitch, yaw = E100_functions.get_orientation(client) # read quadcopter's attitude
     
     front, right, left, back = E100_functions.get_lidars(client)    # read LIDAR readings
     
-    top = get_custom_lidar(client)
+    top = get_custom_lidar(client) # retrieve custom LiDAR (top sensor)
 
+    # apply low-pass filters for each sensor
     front = find_lpf(alpha_lidar, front, front1)
     right = find_lpf(alpha_lidar, right, right1)
     left = find_lpf(alpha_lidar, left, left1)
-    
     top = find_lpf(alpha_lidar, top, top1)
     
     
@@ -136,25 +130,32 @@ while True:
     right1 = right
     left1 = left
     top1 = top
+
     
-    if (now - start) >= 2:
+    if (now - start) >= 2: # Only start the moving program after 2 seconds
         neg_const = 0
-        linear_vel = abs(E100_functions.get_linear_velocity(client)[0 if math.isclose(abs(desired_yaw % 180), 90, abs_tol=1) else 1])
-        p_gain = 0.6 * linear_vel
+        # Linear Velocity determined if the drone is going in the X or Y direction 
+        linear_vel = abs(
+            E100_functions.get_linear_velocity(client)
+                [0 if math.isclose(abs(desired_yaw % 180), 90, abs_tol=1) else 1]
+            )
+        
+        p_gain = 0.6 * linear_vel # P Controller for velocity
         if isStraight:
-            neg_const = (p_gain * linear_vel)
-        desired_pitch = pitch_pid.calculate(front, target_front_dist) + neg_const
-        #lat_error.append(p_gain * abs(E100_functions.get_linear_velocity(client)[0 if math.isclose(abs(desired_yaw % 360), 90, abs_tol=1) else 1]))
-    
-    #lat_error.append(altitude)
+            neg_const = (p_gain * linear_vel) # it will only take effect if the drone is going down a straight
+        desired_pitch = pitch_pid.calculate(front, target_front_dist) + neg_const # The desired_pitch is determined through the addition of the 2
     
     
+    # Determine the decision to turn laterally
     d = decide_turn(left, right)
+    # Determine the decision to turn vertically
     dv = decide_vertical(top, altitude)
-    # Check if we need to go up
+    
+    # First determine whether the drone is to go up or down
     if dv == Direction.TOP and isLeveled:
+        # This concept of sustain is used a lot, it essentially forces the decision to be declarative rather than sporadic
         sustain_vert += 1
-        if sustain_vert >= 20:
+        if sustain_vert >= 20: # Here it requires 20 iterations to declare it has to go up
             isLeveled = False
             drone_state = State.T
     else:
@@ -167,66 +168,59 @@ while True:
     if dv is None:
         isLeveled = True
         
-        
+    # State.M references normal maze travel, and is only active when the drone_state is not vertical
     if drone_state == State.M:
-        if wasTop and dv != Direction.BOTTOM:
+
+        # Keep hugging the ceiling until the floor is "close" enough
+        if wasTop and dv != Direction.BOTTOM: 
             throttle = alt_pid.calculate(9, top)
             throttle = clamp(throttle, 0, 1)
-            print(abs(top - altitude))
             if math.isclose(top, altitude, abs_tol=8):
                 wasTop = False
                 
         else:
             throttle = alt_pid.calculate(altitude, target_alt)
             throttle = clamp(throttle, 0, 1)
+        
+        # When turning, hug the opposite wall of the turn (rather than center)
         if not isStraight and not math.isclose(left, right, abs_tol=4):
             if left < right:
                 desired_roll = roll_pid.calculate(left, 5)
             else:
                 desired_roll = -roll_pid.calculate(right, 5)
             desired_roll = math.degrees(0.11*np.tanh(desired_roll))
-        else:
+
+        else: # Otherwise use the basic centering algorithm
             desired_roll = roll_pid.calculate(left - right)
             desired_roll = math.degrees(0.075*np.tanh(desired_roll))
-            
-        lat_error.append(top)
-            
         
+        # Logic to determine whether the drone has straightened our
+        # Note the similar usage of "sustain" as described earlier
         if d == Direction.STRAIGHT:
             sustain += 1
             if sustain >= 20:
                 isStraight = True
+        
+        # As soon as a lateral turn is available, initiate the instruction to turn
         elif d != Direction.STRAIGHT and isStraight:
             isStraight = False
             sustain = 0
             desired_yaw = determine_yaw(d, desired_yaw)
-            
-        #print("DD=", str(d), "\nIS", isStraight, "\ndy=", desired_yaw, "\n--------------------")
     
-    else: # The drone needs to go up and look for an op to switch to State.M
+    else: # The drone needs to go up and look for an opportunity to switch to State.M
+          # In order to switch to State.M it needs to find an available turn
         wasTop = True
         throttle = alt_pid.calculate(target_alt, top)
         throttle = clamp(throttle, 0, 1)
         desired_roll = roll_pid.calculate(left - right)
         desired_roll = math.degrees(0.075*np.tanh(desired_roll))
-        #print(top)
         if math.isclose(top, 6.5, abs_tol=2):
             deci = decide_turn(left, right)
-            print("CHANGING BACK TO MAZE MODE WITH DIRECTION: ", deci)
-            print(desired_yaw)
             desired_yaw = determine_yaw(deci, desired_yaw)
-            print(desired_yaw)
             drone_state = State.M
             isStraight = False
             
-    desired_yaw %= 360
-
-    plt.plot(lat_error)
-
-
-#plt.scatter(x_pos,y_pos)
-
-#### Copy and paste the following in your own flight controller #####    
+    desired_yaw %= 360   
 
 ############### release the link to AirSim ###########
 client.armDisarm(False)
