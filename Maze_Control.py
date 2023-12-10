@@ -152,7 +152,7 @@ while True:
     dv = decide_vertical(top, altitude)
     
     # First determine whether the drone is to go up or down
-    if dv == Direction.TOP and isLeveled:
+    if (now-start) > 2 and dv == Direction.TOP and isLeveled:
         # This concept of sustain is used a lot, it essentially forces the decision to be declarative rather than sporadic
         sustain_vert += 1
         if sustain_vert >= 20: # Here it requires 20 iterations to declare it has to go up
